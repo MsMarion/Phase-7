@@ -1,4 +1,4 @@
-module BRANCH_PREDICTOR #(
+module BRANCH_PREDICTION #(
     parameter BHT_ENTRIES = 16,
     parameter IDX_BITS    = 4
 )(

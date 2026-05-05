@@ -1,4 +1,4 @@
-module SIMD_MAC (
+module SIMD (
     input  wire signed [31:0] i_a0, i_a1, i_a2, i_a3,
     input  wire signed [31:0] i_b0, i_b1, i_b2, i_b3,
     input  wire signed [31:0] i_acc0, i_acc1, i_acc2, i_acc3,

@@ -1,5 +1,5 @@
-`include "BRANCH_PREDICTOR.v"
-`include "SIMD_MAC.v"
+`include "BRANCH_PREDICTION.v"
+`include "SIMD.v"
 
 module RISCV_TOP (
     input iClk,
@@ -15,9 +15,14 @@ module RISCV_TOP (
   wire [31:0] wIMemRdAddr, wIMemWrAddr;
   wire [511:0] wIMemData, wIMemRdData, wIMemWrData;
 
+  wire [31:0] wIF_PC;
+  wire [31:0] wIF_Instr;
+  wire        wIFIDWrite;
+  wire        wPCWrite;
+  wire [31:0] wActualNextPC;
+
   CACHE #(
     .EVICT_POLICY(0),
-    .WAYS(4),
     .CACHE_SIZE(32),
     .BLOCK_SIZE(64)
   ) icache (
@@ -66,7 +71,7 @@ module RISCV_TOP (
   wire wEX_IsBranch_for_BP = wEX_Branch;
   wire wEX_IsJump_for_BP   = wEX_Jump;
 
-  BRANCH_PREDICTOR #(.BHT_ENTRIES(16), .IDX_BITS(4)) bp (
+  BRANCH_PREDICTION #(.BHT_ENTRIES(16), .IDX_BITS(4)) bp (
     .clk              (iClk),
     .rstn             (iRstN),
     .i_if_pc          (wIF_PC),
@@ -348,7 +353,6 @@ module RISCV_TOP (
 
   CACHE #(
     .EVICT_POLICY(0),
-    .WAYS(4),
     .CACHE_SIZE(32),
     .BLOCK_SIZE(64)
   ) dcache (
@@ -429,7 +433,7 @@ module RISCV_TOP (
 
   wire [31:0] wSIMD_Out0, wSIMD_Out1, wSIMD_Out2, wSIMD_Out3;
 
-  SIMD_MAC simd_mac (
+  SIMD simd_mac (
     .i_a0   (wAluSrcA_raw),
     .i_a1   (wEX_Rs1Data),
     .i_a2   (wEX_Rs1Data),
@@ -451,7 +455,7 @@ module RISCV_TOP (
   wire [31:0] wEX_FinalAluResult = wIsMac4 ? wSIMD_Out0 : wAluResult;
 
   wire wCacheStall;
-  MISS_HANDLER #(.BLOCK_SIZE(64)) miss_handler (
+  miss_handler #(.BLOCK_SIZE(64)) miss_handler (
     .iClk(iClk), .iRstN(iRstN),
     .oIMemReady(wIMemReady),
     .oIMemValid(wIMemValid),

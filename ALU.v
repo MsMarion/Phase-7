@@ -177,11 +177,13 @@ module ALU (
         rData = wSum;
         rZero = sltOut[0];
       end
+      /* verilator lint_off CASEOVERLAP */
       BGE:
       begin
         rData = wSum;
         rZero = !sltOut[0];
       end
+      /* verilator lint_off CASEOVERLAP */
       BLTU:
       begin
         rData = wSum;
