@@ -28,6 +28,8 @@ module ID_EX(
     input  wire [2:0]  i_funct3,    // for ALU and MEM control
     input  wire [6:0]  i_funct7,    // for ALU control
     input  wire        iFinish,
+    input  wire        iIsMult,
+    input  wire        iIsSimd,
 
     // Outputs to EX stage
     output reg         oPcSrc,
@@ -41,6 +43,8 @@ module ID_EX(
     output reg         oBranch,
     output reg         oJump,
     output reg         oLui,
+    output reg         oIsMult,
+    output reg         oIsSimd,
 
     output reg [31:0]  o_rs1_value,
     output reg [31:0]  o_rs2_value,
@@ -68,6 +72,8 @@ always @(posedge clk) begin
         oBranch     <= 1'b0;
         oJump       <= 1'b0;
         oLui        <= 1'b0;
+        oIsMult     <= 1'b0;
+        oIsSimd     <= 1'b0;
 
         o_rs1_value <= 32'b0;
         o_rs2_value <= 32'b0;
@@ -92,6 +98,8 @@ always @(posedge clk) begin
         oBranch     <= iBranch;
         oJump       <= iJump;
         oLui        <= iLui;
+        oIsMult     <= iIsMult;
+        oIsSimd     <= iIsSimd;
 
         o_rs1_value <= i_rs1_value;
         o_rs2_value <= i_rs2_value;

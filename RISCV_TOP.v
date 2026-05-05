@@ -63,10 +63,10 @@ module RISCV_TOP (
     .iIF_PC(wIF_PC),
     .oPrediction(wPrediction),
     .oPredictedPC(wPredictedPC),
-    .iUpdateEn(1'b0),      // TODO: Connect to EX stage feedback
-    .iUpdatePC(32'b0),
-    .iActualTarget(32'b0),
-    .iActualTaken(1'b0)
+    .iUpdateEn(wEX_Branch || wEX_Jump),
+    .iUpdatePC(wEX_PC),
+    .iActualTarget(wEX_BranchTarget),
+    .iActualTaken(wBranchTaken)
   );
 
   // ==========================================================================
@@ -113,8 +113,10 @@ module RISCV_TOP (
     .oImm(wID_Imm)
   );
 
-  CONTROL control (
+  CONTROL control_unit (
     .iOpcode(wID_Opcode),
+    .iFunct3(wID_Funct3),
+    .iFunct7(wID_Funct7),
     .oLui(wID_Lui),
     .oPcSrc(wID_PcSrc),
     .oMemRd(wID_MemRd),
@@ -126,8 +128,11 @@ module RISCV_TOP (
     .oRegWrite(wID_RegWrite),
     .oBranch(wID_Branch),
     .oJump(wID_Jump),
-    .oFinish(wID_Finish)
+    .oFinish(wID_Finish),
+    .oIsMult(wID_IsMult),
+    .oIsSimd(wID_IsSimd)
   );
+  wire wID_IsMult, wID_IsSimd;
   wire wID_Finish;
 
 
@@ -176,7 +181,7 @@ module RISCV_TOP (
   ID_EX reg_id_ex (
     .clk(iClk),
     .rst(~iRstN),
-    .stall(wCacheStall), // NEW: gated by cache stall
+    .stall(wCacheStall || wMultBusy), // NEW: gated by cache/mult stall
     .flush(wIDEXFlush || wBranchTaken),
     .iPcSrc(wID_PcSrc),
     .iMemRead(wID_MemRd),
@@ -199,6 +204,8 @@ module RISCV_TOP (
     .i_funct3(wID_Funct3),
     .i_funct7(wID_Funct7),
     .iFinish(wID_Finish),
+    .iIsMult(wID_IsMult),
+    .iIsSimd(wID_IsSimd),
     // Outputs
     .oPcSrc(wEX_PcSrc),
     .oMemRead(wEX_MemRd),
@@ -220,8 +227,11 @@ module RISCV_TOP (
     .o_rd_ptr(wEX_Rd),
     .o_funct3(wEX_Funct3),
     .o_funct7(wEX_Funct7),
-    .oFinish(wEX_Finish)
+    .oFinish(wEX_Finish),
+    .oIsMult(wEX_IsMult),
+    .oIsSimd(wEX_IsSimd)
   );
+  wire wEX_IsMult, wEX_IsSimd;
   wire wEX_Finish;
 
 
@@ -309,11 +319,17 @@ module RISCV_TOP (
     .iDataA(wAluDataA),
     .iDataB(wAluDataB),
     .iFunct3(wEX_Funct3),
-    .iStart(1'b0),         // TODO: Connect to control logic
+    .iStart(wEX_IsMult && !wMultBusy), // Start when control signals it and not busy
     .oResult(wMultResult),
     .oBusy(wMultBusy),
     .oDone(wMultDone)
   );
+
+  // Result selection: ALU, Mult, or SIMD
+  wire [31:0] wEX_FinalResult;
+  assign wEX_FinalResult = (wEX_IsMult) ? wMultResult : 
+                           (wEX_IsSimd) ? wSimdResult : 
+                                          wAluResult;
 
   // --- Phase 7: SIMD ---
   wire [31:0] wSimdResult;
@@ -364,7 +380,7 @@ module RISCV_TOP (
     .iJump(wEX_Jump),
     .iLui(wEX_Lui),
     .i_imm(wEX_Imm),
-    .i_ALU_result(wAluResult),
+    .i_ALU_result(wEX_FinalResult),
     .i_zero(wAluZero),
     .i_offset(wEX_Imm),
     .i_rs2_value(wAluSrcB_raw),
@@ -517,7 +533,9 @@ module RISCV_TOP (
     .iDMemWrAddr(wDMemWrAddr),
     .iDMemWrData(wDMemWrData),
     // Global Stall
-    .oStall(wCacheStall)
+    .oStall(wCacheStall_internal)
   );
+  wire wCacheStall_internal;
+  assign wCacheStall = wCacheStall_internal || (wEX_IsMult && wMultBusy);
 
 endmodule

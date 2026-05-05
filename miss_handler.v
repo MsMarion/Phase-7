@@ -35,63 +35,75 @@ module MISS_HANDLER #(
 
     reg [1:0] state, next_state;
 
-    // Memory Interface
-    reg         rd_req;
-    reg         wr_req;
-    reg [31:0]  req_addr;
-    reg [BLOCK_SIZE*8-1:0] wr_data;
-    wire [BLOCK_SIZE*8-1:0] rd_data;
-    wire        mem_done;
+    // Latched request info
+    reg         rRdReq;
+    reg         rWrReq;
+    reg [31:0]  rAddr;
+    reg [BLOCK_SIZE*8-1:0] rWriteData;
 
-    // --- Integrated Main Memory (formerly SHARED_MEM) ---
+    // Memory array (required by testbench)
     parameter MEM_LATENCY = 100;
     parameter MEM_SIZE    = 1048576; // 1 MB
-    
-    // THE ARRAY THE TESTBENCH EXPECTS
     reg [7:0] main_memory [0:MEM_SIZE-1];
 
     reg [BLOCK_SIZE*8-1:0] rReadData;
     reg [$clog2(MEM_LATENCY+1)-1:0] rDelayCnt;
     reg rBusy;
 
-    assign rd_data  = rReadData;
-    assign mem_done = (rBusy && (rDelayCnt == MEM_LATENCY[$clog2(MEM_LATENCY+1)-1:0]));
+    assign oIMemData = rReadData;
+    assign oDMemData = rReadData;
+    assign oStall    = (state != IDLE) || rBusy;
+    
+    wire mem_done = (rBusy && (rDelayCnt == MEM_LATENCY[$clog2(MEM_LATENCY+1)-1:0]));
 
-    integer i;
+    integer k;
     always @(posedge iClk or negedge iRstN) begin
         if (!iRstN) begin
             rDelayCnt <= '0;
             rBusy     <= 1'b0;
             rReadData <= '0;
+            rRdReq    <= 1'b0;
+            rWrReq    <= 1'b0;
+            rAddr     <= 32'b0;
+            rWriteData <= '0;
         end else begin
+            // Start a new internal memory operation
+            // We use the signals from the arbiter
             if ((rd_req || wr_req) && !rBusy) begin
-                rBusy     <= 1'b1;
-                rDelayCnt <= '0;
+                rBusy      <= 1'b1;
+                rDelayCnt  <= '0;
+                rRdReq     <= rd_req;
+                rWrReq     <= wr_req;
+                rAddr      <= req_addr;
+                rWriteData <= wr_data;
             end else if (rBusy) begin
                 if (rDelayCnt < MEM_LATENCY[$clog2(MEM_LATENCY+1)-1:0]) begin
                     rDelayCnt <= rDelayCnt + 1'b1;
                 end else begin
                     // Operation completes
-                    if (rd_req) begin
-                        for (i = 0; i < BLOCK_SIZE; i = i + 1) begin
-                            rReadData[i*8 +: 8] <= main_memory[req_addr + i];
+                    if (rRdReq) begin
+                        for (k = 0; k < BLOCK_SIZE; k = k + 1) begin
+                            rReadData[k*8 +: 8] <= main_memory[rAddr + k];
                         end
                     end
-                    if (wr_req) begin
-                        for (i = 0; i < BLOCK_SIZE; i = i + 1) begin
-                            main_memory[req_addr + i] <= wr_data[i*8 +: 8];
+                    if (rWrReq) begin
+                        for (k = 0; k < BLOCK_SIZE; k = k + 1) begin
+                            main_memory[rAddr + k] <= rWriteData[k*8 +: 8];
                         end
                     end
-                    rBusy <= 1'b0;
+                    rBusy  <= 1'b0;
+                    rRdReq <= 1'b0;
+                    rWrReq <= 1'b0;
                 end
             end
         end
     end
-    // --- End Integrated Memory ---
 
-    assign oIMemData = rd_data;
-    assign oDMemData = rd_data;
-    assign oStall    = (state != IDLE) || rBusy; // Stall while memory is busy
+    // Arbiter Logic
+    reg         rd_req;
+    reg         wr_req;
+    reg [31:0]  req_addr;
+    reg [BLOCK_SIZE*8-1:0] wr_data;
 
     always @(posedge iClk or negedge iRstN) begin
         if (!iRstN) begin
@@ -114,7 +126,6 @@ module MISS_HANDLER #(
 
         case (state)
             IDLE: begin
-                // D-Cache gets priority
                 if (iDMemRd || iDMemWr) begin
                     oDMemReady = 1'b1;
                     next_state = SERVING_D;
@@ -126,10 +137,13 @@ module MISS_HANDLER #(
 
             SERVING_D: begin
                 oDMemReady = 1'b1;
-                rd_req     = iDMemRd;
-                wr_req     = iDMemWr;
-                req_addr   = iDMemRd ? iDMemRdAddr : iDMemWrAddr;
-                wr_data    = iDMemWrData;
+                // Only trigger the start of the memory operation once
+                if (!rBusy && !mem_done) begin
+                    rd_req     = iDMemRd;
+                    wr_req     = iDMemWr;
+                    req_addr   = iDMemRd ? iDMemRdAddr : iDMemWrAddr;
+                    wr_data    = iDMemWrData;
+                end
 
                 if (mem_done) begin
                     oDMemValid = 1'b1;
@@ -139,10 +153,12 @@ module MISS_HANDLER #(
 
             SERVING_I: begin
                 oIMemReady = 1'b1;
-                rd_req     = iIMemRd;
-                wr_req     = iIMemWr;
-                req_addr   = iIMemRd ? iIMemRdAddr : iIMemWrAddr;
-                wr_data    = iIMemWrData;
+                if (!rBusy && !mem_done) begin
+                    rd_req     = iIMemRd;
+                    wr_req     = iIMemWr;
+                    req_addr   = iIMemRd ? iIMemRdAddr : iIMemWrAddr;
+                    wr_data    = iIMemWrData;
+                end
 
                 if (mem_done) begin
                     oIMemValid = 1'b1;

@@ -1,5 +1,7 @@
 module CONTROL (
     input [6:0] iOpcode,
+    input [2:0] iFunct3,
+    input [6:0] iFunct7,
     output oLui,
     output oPcSrc,
     output oMemRd,
@@ -11,11 +13,13 @@ module CONTROL (
     output oRegWrite,
     output oBranch,
     output oJump,
-    output oFinish
+    output oFinish,
+    output oIsMult,
+    output oIsSimd
 );
 
 // Use assign and registers so we can use the 'always' loop.
-reg rLui, rPcSrc, rMemRd, rMemWr, rMemtoReg, rAluSrc1, rAluSrc2, rRegWrite, rBranch, rJump, rFinish;
+reg rLui, rPcSrc, rMemRd, rMemWr, rMemtoReg, rAluSrc1, rAluSrc2, rRegWrite, rBranch, rJump, rFinish, rIsMult, rIsSimd;
 reg [2:0] rAluOp;
 
 assign oLui      = rLui;
@@ -30,6 +34,8 @@ assign oRegWrite = rRegWrite;
 assign oBranch   = rBranch;
 assign oJump     = rJump;
 assign oFinish   = rFinish;
+assign oIsMult   = rIsMult;
+assign oIsSimd   = rIsSimd;
 
 
 // Very similar logic to decoder. Map opcode -> flags.
@@ -47,13 +53,26 @@ always @(*) begin
     rBranch   = 0;
     rJump     = 0;
     rFinish   = 0;
+    rIsMult   = 0;
+    rIsSimd   = 0;
 
     case (iOpcode)
 
-        // R-type
+        // R-type / M-extension
         7'b0110011: begin 
+            if (iFunct7 == 7'b0000001) begin
+                rIsMult   = 1;
+                rRegWrite = 1;
+            end else begin
+                rRegWrite = 1;
+                rAluOp    = 3'b010;
+            end
+        end
+
+        // SIMD (Vector Opcode)
+        7'b1010111: begin
+            rIsSimd   = 1;
             rRegWrite = 1;
-            rAluOp    = 3'b010;
         end
 
         // I-type ALU
