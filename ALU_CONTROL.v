@@ -5,42 +5,25 @@ module ALU_CONTROL (
     output [3:0] oAluCtrl
   );
 
-  /* iAluOp Descriptions:
-      000
-          ADD (default)
-          loads, stores, JAL, JALR, AUIPC
-      001
-          Branch compare
-          BEQ/BNE/BLT/BGE/etc.
-      010
-          R-type
-          ADD/SUB/AND/OR/XOR/etc.
-      011
-          I-type ALU
-          ADDI/ANDI/ORI/etc.
-  */
-
-
-  // ALU Control Values
-  localparam ADD = 4'b0000;
-  localparam SUB = 4'b1000;
-  localparam SLL = 4'b0001;
-  localparam SRL = 4'b1001;
-  localparam SRA = 4'b1101;
-  localparam SLT = 4'b0010;
+  localparam ADD  = 4'b0000;
+  localparam SUB  = 4'b1000;
+  localparam SLL  = 4'b0001;
+  localparam SRL  = 4'b1001;
+  localparam SRA  = 4'b1101;
+  localparam SLT  = 4'b0010;
   localparam SLTU = 4'b0011;
-  localparam XOR = 4'b0100;
-  localparam OR = 4'b0110;
-  localparam AND = 4'b0111;
-  localparam BEQ = 4'b1000;
-  localparam BNE = 4'b1100;
-  localparam BLT = 4'b1010;
-  localparam BGE = 4'b1110;
+  localparam XOR  = 4'b0100;
+  localparam OR   = 4'b0110;
+  localparam AND  = 4'b0111;
+  localparam BEQ  = 4'b1000;
+  localparam BNE  = 4'b1100;
+  localparam BLT  = 4'b1010;
+  localparam BGE  = 4'b1110;
   localparam BLTU = 4'b1011;
   localparam BGEU = 4'b1111;
+  localparam MUL  = 4'b1110;
+  localparam MAC4 = 4'b0101;
 
-
-  // Internal reg for combinational logic
   reg [3:0] rAluCtrl;
   assign oAluCtrl = rAluCtrl;
 
@@ -49,14 +32,12 @@ module ALU_CONTROL (
     rAluCtrl = 4'b0000;
     case (iAluOp)
 
-      3'b000: // Adding values for later use in ALU
-        // why add? Because the remaning instrctions (not listed above)
-        // are fundamentally adding numbers and saving them in specific places
+      3'b000:
       begin
         rAluCtrl = ADD;
       end
 
-      3'b001: // BRANCH INSTRUCTIONS
+      3'b001:
       begin
         if(iFunct3 == 3'd0)
           rAluCtrl = BEQ;
@@ -77,7 +58,7 @@ module ALU_CONTROL (
           rAluCtrl = BGEU;
       end
 
-      3'b010: // R-TYPE INSTRUCTIONS
+      3'b010:
       begin
         if(iFunct3 == 3'd0 && iFunct7 == 7'd0)
           rAluCtrl = ADD;
@@ -109,9 +90,15 @@ module ALU_CONTROL (
         if(iFunct3 == 3'b111 && iFunct7 == 7'd0)
           rAluCtrl = AND;
 
+        if(iFunct3 == 3'b000 && iFunct7 == 7'b0000001)
+          rAluCtrl = MUL;
+
+        if(iFunct3 == 3'b000 && iFunct7 == 7'b0000010)
+          rAluCtrl = MAC4;
+
       end
 
-      3'b011: // I-TYPE INSTRUCTIONS
+      3'b011:
       begin
         if(iFunct3 == 3'd0)
           rAluCtrl = ADD;
@@ -139,8 +126,14 @@ module ALU_CONTROL (
 
         if(iFunct3 == 3'b111)
           rAluCtrl = AND;
-      end
 
+        if(iFunct3 == 3'b000 && iFunct7 == 7'b0000001)
+          rAluCtrl = MUL;
+
+        if(iFunct3 == 3'b000 && iFunct7 == 7'b0000010)
+          rAluCtrl = MAC4;
+
+      end
 
       default:
       begin
