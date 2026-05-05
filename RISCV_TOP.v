@@ -17,9 +17,20 @@ module RISCV_TOP (
   wire [31:0] wIMemRdAddr, wIMemWrAddr;
   wire [511:0] wIMemData, wIMemRdData, wIMemWrData;
 
+  wire [31:0] wActualNextPC, wIF_PC, wIF_Instr;
+  reg  [31:0] rPC;
+  wire wPCWrite, wIFIDWrite;
+
+  always @(posedge iClk or negedge iRstN) begin
+    if (~iRstN) rPC <= 32'h0;
+    else if (wPCWrite && !wCacheStall) rPC <= wActualNextPC;
+  end
+
+  assign wIF_PC = rPC;
+
   CACHE #(
     .EVICT_POLICY(0), 
-    .WAYS(4), 
+    .NUM_WAYS(4), 
     .CACHE_SIZE(32), 
     .BLOCK_SIZE(64)
   ) icache (
@@ -42,6 +53,21 @@ module RISCV_TOP (
   );
 
   assign wIF_Instr = wICacheHit ? wICacheReadData : 32'h00000013;
+
+  // --- Phase 7: Branch Prediction ---
+  wire wPrediction;
+  wire [31:0] wPredictedPC;
+  BRANCH_PREDICTION branch_predictor (
+    .iClk(iClk),
+    .iRstN(iRstN),
+    .iIF_PC(wIF_PC),
+    .oPrediction(wPrediction),
+    .oPredictedPC(wPredictedPC),
+    .iUpdateEn(1'b0),      // TODO: Connect to EX stage feedback
+    .iUpdatePC(32'b0),
+    .iActualTarget(32'b0),
+    .iActualTaken(1'b0)
+  );
 
   // ==========================================================================
   // Pipeline Register: IF/ID
@@ -208,9 +234,9 @@ module RISCV_TOP (
   wire wAluZero;
   
   // Forwarding Unit
-  wire [4:0] wMEM_Rd, wWB_Rd;
-  wire wMEM_RegWrite, wWB_RegWrite, wMEM_MemRd, wWB_MemRd;
-  wire [31:0] wMEM_AluResult, wWB_FinalWriteData;
+  wire [4:0] wMEM_Rd;
+  wire wMEM_RegWrite, wMEM_MemRd, wWB_MemRd;
+  wire [31:0] wMEM_AluResult;
 
   ForwardingUnit forward_unit (
     .ID_EX_rs1(wEX_Rs1),
@@ -272,6 +298,30 @@ module RISCV_TOP (
     .iAluCtrl(wAluCtrl),
     .oData(wAluResult),
     .oZero(wAluZero)
+  );
+
+  // --- Phase 7: Multiplier ---
+  wire [31:0] wMultResult;
+  wire wMultBusy, wMultDone;
+  MULTIPLIER multiplier (
+    .iClk(iClk),
+    .iRstN(iRstN),
+    .iDataA(wAluDataA),
+    .iDataB(wAluDataB),
+    .iFunct3(wEX_Funct3),
+    .iStart(1'b0),         // TODO: Connect to control logic
+    .oResult(wMultResult),
+    .oBusy(wMultBusy),
+    .oDone(wMultDone)
+  );
+
+  // --- Phase 7: SIMD ---
+  wire [31:0] wSimdResult;
+  SIMD simd (
+    .iDataA(wAluDataA),
+    .iDataB(wAluDataB),
+    .iSimdOp(wEX_Funct3), // Placeholder
+    .oResult(wSimdResult)
   );
 
   BRANCH_JUMP branch_jump (
@@ -359,7 +409,7 @@ module RISCV_TOP (
 
   CACHE #(
     .EVICT_POLICY(0), 
-    .WAYS(4), 
+    .NUM_WAYS(4), 
     .CACHE_SIZE(32), 
     .BLOCK_SIZE(64)
   ) dcache (

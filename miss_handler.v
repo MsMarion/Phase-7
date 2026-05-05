@@ -43,23 +43,55 @@ module MISS_HANDLER #(
     wire [BLOCK_SIZE*8-1:0] rd_data;
     wire        mem_done;
 
-    SHARED_MEM #(
-        .BLOCK_SIZE(BLOCK_SIZE),
-        .MEM_LATENCY(100)
-    ) main_mem (
-        .iClk(iClk),
-        .iRstN(iRstN),
-        .iRead(rd_req),
-        .iWrite(wr_req),
-        .iAddr(req_addr),
-        .iWriteData(wr_data),
-        .oReadData(rd_data),
-        .oReady(mem_done)
-    );
+    // --- Integrated Main Memory (formerly SHARED_MEM) ---
+    parameter MEM_LATENCY = 100;
+    parameter MEM_SIZE    = 1048576; // 1 MB
+    
+    // THE ARRAY THE TESTBENCH EXPECTS
+    reg [7:0] main_memory [0:MEM_SIZE-1];
+
+    reg [BLOCK_SIZE*8-1:0] rReadData;
+    reg [$clog2(MEM_LATENCY+1)-1:0] rDelayCnt;
+    reg rBusy;
+
+    assign rd_data  = rReadData;
+    assign mem_done = (rBusy && (rDelayCnt == MEM_LATENCY[$clog2(MEM_LATENCY+1)-1:0]));
+
+    integer i;
+    always @(posedge iClk or negedge iRstN) begin
+        if (!iRstN) begin
+            rDelayCnt <= '0;
+            rBusy     <= 1'b0;
+            rReadData <= '0;
+        end else begin
+            if ((rd_req || wr_req) && !rBusy) begin
+                rBusy     <= 1'b1;
+                rDelayCnt <= '0;
+            end else if (rBusy) begin
+                if (rDelayCnt < MEM_LATENCY[$clog2(MEM_LATENCY+1)-1:0]) begin
+                    rDelayCnt <= rDelayCnt + 1'b1;
+                end else begin
+                    // Operation completes
+                    if (rd_req) begin
+                        for (i = 0; i < BLOCK_SIZE; i = i + 1) begin
+                            rReadData[i*8 +: 8] <= main_memory[req_addr + i];
+                        end
+                    end
+                    if (wr_req) begin
+                        for (i = 0; i < BLOCK_SIZE; i = i + 1) begin
+                            main_memory[req_addr + i] <= wr_data[i*8 +: 8];
+                        end
+                    end
+                    rBusy <= 1'b0;
+                end
+            end
+        end
+    end
+    // --- End Integrated Memory ---
 
     assign oIMemData = rd_data;
     assign oDMemData = rd_data;
-    assign oStall    = (state != IDLE);
+    assign oStall    = (state != IDLE) || rBusy; // Stall while memory is busy
 
     always @(posedge iClk or negedge iRstN) begin
         if (!iRstN) begin
@@ -117,6 +149,7 @@ module MISS_HANDLER #(
                     next_state = IDLE;
                 end
             end
+            default: next_state = IDLE;
         endcase
     end
 

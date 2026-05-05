@@ -28,8 +28,8 @@ module SHARED_MEM #(
     reg [$clog2(MEM_LATENCY+1)-1:0] rDelayCnt;
 
     // mask address for smaller memory
-    wire [$clog2(MEM_DEPTH)-1:0] mem_index =
-        (rAddr >> $clog2(BLOCK_SIZE)) & (MEM_DEPTH-1);
+    wire [31:0] temp_index = (rAddr >> $clog2(BLOCK_SIZE)) & (MEM_DEPTH-1);
+    wire [$clog2(MEM_DEPTH)-1:0] mem_index = temp_index[$clog2(MEM_DEPTH)-1:0];
 
     always @(posedge iClk or negedge iRstN) begin
         if (!iRstN) begin

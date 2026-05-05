@@ -155,14 +155,16 @@ module CACHE #(
             pf_victim_data_reg  <= {(BLOCK_SIZE*8){1'b0}};
             pf_tag_latched      <= {TAG_BITS{1'b0}};
             pf_idx_latched      <= {IDX_BITS{1'b0}};
+            /* verilator lint_off BLKSEQ */
             for (integer i = 0; i < NUM_SETS; i++) begin
                 for (integer j = 0; j < NUM_WAYS; j++) begin
-                    vld[i][j] <= 1'b0;
-                    dirty[i][j] <= 1'b0;
-                    tagStore[i][j]  <= {(TAG_BITS){1'b0}};
-                    dataArray[i][j]  <= {(BLOCK_SIZE*8){1'b0}};
+                    vld[i][j] = 1'b0;
+                    dirty[i][j] = 1'b0;
+                    tagStore[i][j]  = {(TAG_BITS){1'b0}};
+                    dataArray[i][j]  = {(BLOCK_SIZE*8){1'b0}};
                 end
             end
+            /* verilator lint_on BLKSEQ */
         end else begin
             state <= next_state;
 

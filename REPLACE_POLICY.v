@@ -45,10 +45,12 @@ module REPLACE_POLICY #(
     integer x;
     always @(posedge iClk or negedge iRstN) begin
         if (!iRstN) begin
+            /* verilator lint_off BLKSEQ */
             for (x = 0; x < NUM_SETS; x = x + 1) begin
-                lruBit[x]  <= 1'b0;
-                plruBit[x] <= 1'b0;
+                lruBit[x]  = 1'b0;
+                plruBit[x] = 1'b0;
             end
+            /* verilator lint_on BLKSEQ */
         end else if (iAccessValid && iHit) begin
             lruBit[iSetIndex]  <= iHitWay[0];
             plruBit[iSetIndex] <= ~iHitWay[0];
@@ -80,9 +82,11 @@ module REPLACE_POLICY #(
 
     always @(posedge iClk or negedge iRstN) begin
         if (!iRstN) begin
+            /* verilator lint_off BLKSEQ */
             for (z = 0; z < NUM_SETS; z = z + 1)
                 for (k = 0; k < ASSOC; k = k + 1)
-                    age[z][k] <= {WAY_BITS{1'b0}};
+                    age[z][k] = {WAY_BITS{1'b0}};
+            /* verilator lint_on BLKSEQ */
         end else if (iHit && iAccessValid) begin
             for (e = 0; e < ASSOC; e = e + 1) begin
                 if (e[WAY_BITS-1:0] == iHitWay)
@@ -152,8 +156,10 @@ module REPLACE_POLICY #(
     integer lp;
     always @(posedge iClk or negedge iRstN) begin
         if (!iRstN) begin
+            /* verilator lint_off BLKSEQ */
             for (gp = 0; gp < NUM_SETS; gp = gp + 1)
-                plruTree[gp] <= {TREE_BITS{1'b0}};
+                plruTree[gp] = {TREE_BITS{1'b0}};
+            /* verilator lint_on BLKSEQ */
         end else if (iHit && iAccessValid) begin
             for (lp = 0; lp < WAY_BITS; lp = lp + 1)
                 plruTree[iSetIndex][plruNode[lp]] <= plruDir[lp];
