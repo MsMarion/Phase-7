@@ -63,7 +63,7 @@ module RISCV_TOP (
     .iIF_PC(wIF_PC),
     .oPrediction(wPrediction),
     .oPredictedPC(wPredictedPC),
-    .iUpdateEn(wEX_Branch || wEX_Jump),
+    .iUpdateEn((wEX_Branch || wEX_Jump) && !wCacheStall),
     .iUpdatePC(wEX_PC),
     .iActualTarget(wEX_BranchTarget),
     .iActualTaken(wBranchTaken)
@@ -78,7 +78,7 @@ module RISCV_TOP (
   IF_ID reg_if_id (
     .clk(iClk),
     .rst(~iRstN),
-    .stall(~wIFIDWrite || wCacheStall), // NEW: gated by cache stall
+    .stall(~wIFIDWrite || wCacheStall), // NEW: include cache/mult stall
     .flush(wBranchTaken),
     .i_PC(wIF_PC),
     .i_instruction(wIF_Instr),
@@ -355,7 +355,9 @@ module RISCV_TOP (
   assign wBranchTaken = (wEX_Branch && wAluZero) || wEX_Jump;
   
   // PC Update Logic: Normal = PC + 4, Branch/Jump = BranchTarget
-  assign wActualNextPC = (wBranchTaken) ? wEX_BranchTarget : (~wPCWrite) ? wIF_PC : (wIF_PC + 32'd4); // Keep PC the same if stalling
+  assign wActualNextPC = (wBranchTaken) ? wEX_BranchTarget : 
+                         (~wPCWrite || wCacheStall) ? wIF_PC : // Stall PC if hazard or cache/mult stall
+                         (wIF_PC + 32'd4);
                                          
 
 
